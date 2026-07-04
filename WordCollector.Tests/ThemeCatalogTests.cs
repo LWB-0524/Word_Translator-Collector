@@ -35,4 +35,16 @@ public class ThemeCatalogTests
         Assert.Equal("#FFFFFF", palette.Colors["SurfaceBrush"]);
         Assert.Equal("#2563EB", palette.Colors["PrimaryBrush"]);
     }
+
+    [Fact]
+    public void Resolve_ProvidesReadableTranslucentWindowSurfacesForBothModes()
+    {
+        var lightPalette = ThemeCatalog.Resolve("light", "blue");
+        var darkPalette = ThemeCatalog.Resolve("dark", "blue");
+
+        Assert.Equal("#D9FFFFFF", lightPalette.Colors["WindowSurfaceBrush"]);
+        Assert.Equal("#E6FFFFFF", lightPalette.Colors["WindowChromeBrush"]);
+        Assert.Equal("#E6101318", darkPalette.Colors["WindowSurfaceBrush"]);
+        Assert.Equal("#F0101318", darkPalette.Colors["WindowChromeBrush"]);
+    }
 }

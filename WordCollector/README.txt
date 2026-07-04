@@ -1,4 +1,4 @@
-WordCollector 1.1.0
+WordCollector 1.3.0
 ===================
 
 一款轻量的 Windows 英语表达收集工具。复制或输入单词、短语、句子后，
