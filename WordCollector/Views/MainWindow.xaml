@@ -1,0 +1,229 @@
+<Window x:Class="WordCollector.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:WordCollector.Converters"
+        Title="WordCollector" Icon="/Assets/wordcollector.ico"
+        WindowStyle="None" Background="{DynamicResource BgBrush}"
+        ResizeMode="CanResize" Topmost="{Binding IsAlwaysOnTop}"
+        Width="520" Height="400" MinWidth="480" MinHeight="340"
+        ShowInTaskbar="True" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="5" CornerRadius="9" GlassFrameThickness="0"/>
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <converters:InverseBoolConverter x:Key="InverseBool"/>
+        <converters:StringToVisibilityConverter x:Key="StringToVis"/>
+        <converters:StringEqualsConverter x:Key="StringEquals"/>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
+            CornerRadius="9" ClipToBounds="True">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="52"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="1"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="40"/>
+            </Grid.RowDefinitions>
+
+            <Grid Background="{DynamicResource HeaderBgBrush}" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <Border Width="28" Height="28" CornerRadius="6" Margin="0,0,9,0">
+                        <Image Source="/Assets/wordcollector-icon.png" Stretch="UniformToFill">
+                            <Image.Clip>
+                                <RectangleGeometry Rect="0,0,28,28" RadiusX="6" RadiusY="6"/>
+                            </Image.Clip>
+                        </Image>
+                    </Border>
+                    <TextBlock Text="WordCollector" FontFamily="{StaticResource DisplayFont}"
+                               Foreground="{DynamicResource HeaderFgBrush}" FontSize="16"
+                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,6,0">
+                    <Button x:Name="PinButton" Style="{StaticResource HeaderButton}" Padding="9,8"
+                            AutomationProperties.Name="切换窗口置顶" Click="PinButton_Click">置顶</Button>
+                    <Button Style="{StaticResource HeaderButton}" Padding="9,8"
+                            AutomationProperties.Name="打开每日复盘" Click="ReviewButton_Click">复盘</Button>
+                    <ToggleButton x:Name="ThemeButton" Style="{StaticResource HeaderToggleButton}" Padding="9,8"
+                                  AutomationProperties.Name="打开主题选择器">主题</ToggleButton>
+                    <Button Style="{StaticResource HeaderButton}" Padding="9,8"
+                            AutomationProperties.Name="打开设置" Click="SettingsButton_Click">设置</Button>
+                    <Button Style="{StaticResource HeaderButton}" Width="36" Padding="7,8"
+                            AutomationProperties.Name="最小化到任务栏" Click="MinimizeButton_Click">—</Button>
+                    <Button Style="{StaticResource HeaderExitButton}" Width="36" Padding="7,8"
+                            AutomationProperties.Name="退出 WordCollector" Click="ExitButton_Click">×</Button>
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="20,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="82"/>
+                    <ColumnDefinition Width="56"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBox x:Name="InputTextBox"
+                         Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
+                         IsEnabled="{Binding IsQuerying, Converter={StaticResource InverseBool}}"
+                         Style="{StaticResource ModernTextBox}"
+                         FontFamily="{StaticResource DisplayFont}" FontSize="18"
+                         Padding="14,10" Margin="0,0,10,0" Height="44"
+                         VerticalContentAlignment="Center"
+                         AutomationProperties.Name="英文表达输入框"
+                         PreviewKeyDown="InputTextBox_PreviewKeyDown"/>
+
+                <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
+                        Padding="12,8" AutomationProperties.Name="查询并保存" Click="QueryButton_Click">
+                    <TextBlock Text="查询" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{DynamicResource PrimaryForegroundBrush}"/>
+                </Button>
+                <Button Grid.Column="2" Content="清空" Style="{StaticResource OutlineButton}"
+                        Padding="8,8" FontSize="13" AutomationProperties.Name="清空内容"
+                        Command="{Binding ClearCommand}"/>
+            </Grid>
+
+            <Border Grid.Row="2" Background="{DynamicResource BorderBrush}"/>
+
+            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Visibility="{Binding MeaningZh, Converter={StaticResource StringToVis}}">
+                <StackPanel Margin="20,14,20,12">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Button Style="{StaticResource SpeakButton}" Width="38" Height="36"
+                                Padding="6" Margin="0,0,12,0"
+                                AutomationProperties.Name="朗读英文表达" Command="{Binding SpeakCommand}">
+                            <TextBlock x:Name="SpeakButtonText" Text="&#xE767;"
+                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                       FontSize="18" Foreground="{DynamicResource PrimaryBrush}"/>
+                        </Button>
+                        <TextBlock Text="{Binding Phonetic}" FontFamily="{StaticResource DisplayFont}"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
+                                   Visibility="{Binding Phonetic, Converter={StaticResource StringToVis}}"/>
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding MeaningZh}" FontFamily="{StaticResource DisplayFont}"
+                               FontSize="20" FontWeight="SemiBold" LineHeight="28"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               TextWrapping="Wrap" Margin="0,0,0,6"/>
+                    <TextBlock Text="{Binding BriefExplanation}" FontSize="14" LineHeight="22"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                    <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="7"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                            Padding="12,10" Margin="0,0,0,7"
+                            Visibility="{Binding ExampleEn, Converter={StaticResource StringToVis}}">
+                        <StackPanel>
+                            <TextBlock Text="例句" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource PrimaryBrush}" Margin="0,0,0,6"/>
+                            <TextBlock Text="{Binding ExampleEn}" FontFamily="{StaticResource DisplayFont}"
+                                       FontSize="14" FontWeight="Medium" LineHeight="21"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,0,0,4"/>
+                            <TextBlock Text="{Binding ExampleZh}" FontSize="13" LineHeight="20"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                                       Visibility="{Binding ExampleZh, Converter={StaticResource StringToVis}}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="{Binding KeyExpressions}" FontSize="12" LineHeight="19"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" Margin="2,0,0,0"
+                               Visibility="{Binding KeyExpressions, Converter={StaticResource StringToVis}}"/>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Border Grid.Row="4" Background="{DynamicResource StatusBgBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="16,0">
+                <Grid>
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="12" FontWeight="Medium"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="查询中…" FontSize="12" Foreground="{DynamicResource PrimaryBrush}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center"
+                               Visibility="{Binding IsQuerying, Converter={StaticResource BoolToVis}}"/>
+                </Grid>
+            </Border>
+
+            <Popup Placement="Bottom" PlacementTarget="{Binding ElementName=ThemeButton}"
+                   HorizontalOffset="-236" VerticalOffset="3"
+                   IsOpen="{Binding IsChecked, ElementName=ThemeButton, Mode=TwoWay}"
+                   StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                <Border Style="{StaticResource PopupPanel}" Width="310">
+                    <StackPanel>
+                        <TextBlock Text="外观" FontFamily="{StaticResource DisplayFont}"
+                                   FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                        <Border Background="{DynamicResource SubtleBgBrush}" CornerRadius="7" Padding="3">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <ToggleButton Style="{StaticResource ThemeSegmentToggle}" Padding="16,8"
+                                              IsChecked="{Binding ThemeMode, Mode=OneWay, Converter={StaticResource StringEquals}, ConverterParameter=light}"
+                                              Command="{Binding SetThemeModeCommand}" CommandParameter="light">
+                                    <TextBlock Text="日间" FontSize="13"
+                                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+                                </ToggleButton>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource ThemeSegmentToggle}" Padding="16,8"
+                                              IsChecked="{Binding ThemeMode, Mode=OneWay, Converter={StaticResource StringEquals}, ConverterParameter=dark}"
+                                              Command="{Binding SetThemeModeCommand}" CommandParameter="dark">
+                                    <TextBlock Text="夜间" FontSize="13"
+                                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+                                </ToggleButton>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="主题色" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,15,0,9"/>
+                        <UniformGrid Columns="5">
+                            <StackPanel HorizontalAlignment="Center">
+                                <ToggleButton Background="#2563EB" Style="{StaticResource ThemeSwatchToggle}"
+                                              IsChecked="{Binding AccentColor, Mode=OneWay, Converter={StaticResource StringEquals}, ConverterParameter=blue}"
+                                              Command="{Binding SetAccentColorCommand}" CommandParameter="blue" ToolTip="海蓝"/>
+                                <TextBlock Text="海蓝" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <StackPanel HorizontalAlignment="Center">
+                                <ToggleButton Background="#7C3AED" Style="{StaticResource ThemeSwatchToggle}"
+                                              IsChecked="{Binding AccentColor, Mode=OneWay, Converter={StaticResource StringEquals}, ConverterParameter=purple}"
+                                              Command="{Binding SetAccentColorCommand}" CommandParameter="purple" ToolTip="靛紫"/>
+                                <TextBlock Text="靛紫" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <StackPanel HorizontalAlignment="Center">
+                                <ToggleButton Background="#0F766E" Style="{StaticResource ThemeSwatchToggle}"
+                                              IsChecked="{Binding AccentColor, Mode=OneWay, Converter={StaticResource StringEquals}, ConverterParameter=teal}"
+                                              Command="{Binding SetAccentColorCommand}" CommandParameter="teal" ToolTip="青绿"/>
+                                <TextBlock Text="青绿" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <StackPanel HorizontalAlignment="Center">
+                                <ToggleButton Background="#D97706" Style="{StaticResource ThemeSwatchToggle}"
+                                              IsChecked="{Binding AccentColor, Mode=OneWay, Converter={StaticResource StringEquals}, ConverterParameter=amber}"
+                                              Command="{Binding SetAccentColorCommand}" CommandParameter="amber" ToolTip="琥珀"/>
+                                <TextBlock Text="琥珀" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <StackPanel HorizontalAlignment="Center">
+                                <ToggleButton Background="#E11D48" Style="{StaticResource ThemeSwatchToggle}"
+                                              IsChecked="{Binding AccentColor, Mode=OneWay, Converter={StaticResource StringEquals}, ConverterParameter=rose}"
+                                              Command="{Binding SetAccentColorCommand}" CommandParameter="rose" ToolTip="玫红"/>
+                                <TextBlock Text="玫红" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+            </Popup>
+        </Grid>
+    </Border>
+</Window>
