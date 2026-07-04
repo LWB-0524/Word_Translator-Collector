@@ -56,8 +56,8 @@ public partial class MainWindow : Window
     private void UpdatePinButton()
     {
         var isPinned = _viewModel.IsAlwaysOnTop;
-        PinButton.Content = isPinned ? "● 置顶" : "置顶";
-        PinButton.FontWeight = isPinned ? FontWeights.Bold : FontWeights.SemiBold;
+        PinIcon.Opacity = isPinned ? 1 : 0.58;
+        PinButton.ToolTip = isPinned ? "取消置顶" : "窗口置顶";
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
