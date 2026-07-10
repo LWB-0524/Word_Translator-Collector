@@ -24,8 +24,9 @@ jobs:
           dotnet-version: '8.0.x'
 
       # test / publish 会隐式还原各自的项目；仓库根目录没有 .sln，故不单独 restore。
+      # 测试用 Debug：主项目在 Release 下是自包含单文件，非自包含的测试项目无法在同配置下引用它（NETSDK1151）。
       - name: Test
-        run: dotnet test WordCollector.Tests/WordCollector.Tests.csproj -c Release --nologo
+        run: dotnet test WordCollector.Tests/WordCollector.Tests.csproj -c Debug --nologo
 
       - name: Publish single-file exe
         run: dotnet publish WordCollector/WordCollector.csproj -c Release -o publish
