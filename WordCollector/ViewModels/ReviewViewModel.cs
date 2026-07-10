@@ -13,6 +13,8 @@ public class ReviewViewModel : BaseViewModel
     private readonly DatabaseService _databaseService;
     private readonly TextToSpeechService _ttsService;
     private List<VocabularyItem> _allEntries = new();
+    private EventHandler? _speakStartedHandler;
+    private EventHandler? _speakCompletedHandler;
 
     public ReviewViewModel(DatabaseService databaseService, TextToSpeechService ttsService)
     {
@@ -42,6 +44,7 @@ public class ReviewViewModel : BaseViewModel
 
     public IReadOnlyList<string> ItemTypeOptions => ReviewOptions.ItemTypes;
     public IReadOnlyList<string> SortModeOptions => ReviewOptions.SortModes;
+    public IReadOnlyList<string> FamiliarityOptions => ReviewOptions.Familiarities;
 
     private string _selectedDate = string.Empty;
     public string SelectedDate { get => _selectedDate; set => SetProperty(ref _selectedDate, value); }
@@ -54,6 +57,28 @@ public class ReviewViewModel : BaseViewModel
 
     private string _sortMode = "时间最新";
     public string SortMode { get => _sortMode; set => SetProperty(ref _sortMode, value); }
+
+    private string _selectedFamiliarity = "全部";
+    public string SelectedFamiliarity
+    {
+        get => _selectedFamiliarity;
+        set
+        {
+            if (SetProperty(ref _selectedFamiliarity, value))
+                Refresh();
+        }
+    }
+
+    private bool _searchAllDates;
+    public bool SearchAllDates
+    {
+        get => _searchAllDates;
+        set
+        {
+            if (SetProperty(ref _searchAllDates, value))
+                Refresh();
+        }
+    }
 
     private VocabularyItem? _selectedEntry;
     public VocabularyItem? SelectedEntry
@@ -94,13 +119,35 @@ public class ReviewViewModel : BaseViewModel
 
     public void Load()
     {
-        _ttsService.SpeakStarted += (_, _) => IsSpeaking = true;
-        _ttsService.SpeakCompleted += (_, _) => IsSpeaking = false;
+        if (_speakStartedHandler == null)
+        {
+            _speakStartedHandler = (_, _) => IsSpeaking = true;
+            _speakCompletedHandler = (_, _) => IsSpeaking = false;
+            _ttsService.SpeakStarted += _speakStartedHandler;
+            _ttsService.SpeakCompleted += _speakCompletedHandler;
+        }
 
         Dates.Clear();
         foreach (var date in _databaseService.GetDistinctDates())
             Dates.Add(date);
         LoadToday();
+    }
+
+    /// <summary>
+    /// 窗口关闭时调用，退订 TTS 事件，避免 app 级服务长期持有本实例。
+    /// </summary>
+    public void Unload()
+    {
+        if (_speakStartedHandler != null)
+        {
+            _ttsService.SpeakStarted -= _speakStartedHandler;
+            _speakStartedHandler = null;
+        }
+        if (_speakCompletedHandler != null)
+        {
+            _ttsService.SpeakCompleted -= _speakCompletedHandler;
+            _speakCompletedHandler = null;
+        }
     }
 
     private void LoadToday()
@@ -140,7 +187,12 @@ public class ReviewViewModel : BaseViewModel
                 "句子" => "sentence",
                 _ => null
             };
-            _allEntries = _databaseService.Search(SearchText, SelectedDate, SelectedDate, typeFilter, null);
+            var (dateFrom, dateTo) = SearchAllDates
+                ? (null, (string?)null)
+                : (SelectedDate, SelectedDate);
+            _allEntries = _databaseService.Search(
+                SearchText, dateFrom, dateTo, typeFilter,
+                ReviewOptions.ToFamiliarityLevel(SelectedFamiliarity));
             ApplyFilters();
         }
         catch (Exception ex)
@@ -156,7 +208,7 @@ public class ReviewViewModel : BaseViewModel
     private void FilterByType(string? type)
     {
         SelectedType = type ?? "全部";
-        if (string.IsNullOrWhiteSpace(SearchText))
+        if (string.IsNullOrWhiteSpace(SearchText) && !SearchAllDates)
             ApplyFilters();
         else
             Search();
@@ -165,13 +217,14 @@ public class ReviewViewModel : BaseViewModel
     private void ApplyFilters()
     {
         Entries = new ObservableCollection<VocabularyItem>(
-            ReviewOptions.Apply(_allEntries, SelectedType, SortMode));
+            ReviewOptions.Apply(_allEntries, SelectedType, SortMode, SelectedFamiliarity));
         StatusText = $"共 {Entries.Count} 条记录";
     }
 
     private void Refresh()
     {
-        if (string.IsNullOrWhiteSpace(SearchText))
+        // 有搜索词或勾选“全部日期”时走 SQL 查询（可跨日期）；否则按当前日期浏览。
+        if (string.IsNullOrWhiteSpace(SearchText) && !SearchAllDates)
             LoadSelectedDate();
         else
             Search();
@@ -230,7 +283,6 @@ public class ReviewViewModel : BaseViewModel
         {
             item.Familiarity = level;
             _databaseService.Update(item);
-            OnPropertyChanged(nameof(Entries));
         }
         catch (Exception ex)
         {
@@ -279,7 +331,11 @@ public class ReviewViewModel : BaseViewModel
             var content = format == "md"
                 ? exportService.GenerateMarkdown(_allEntries, SelectedDate)
                 : exportService.GenerateCsv(_allEntries);
-            File.WriteAllText(dialog.FileName, content);
+            // CSV 带 BOM，Excel 才能正确识别 UTF-8 中文。
+            var encoding = format == "csv"
+                ? new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true)
+                : new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+            File.WriteAllText(dialog.FileName, content, encoding);
             StatusText = $"导出成功：{dialog.FileName}";
         }
         catch (Exception ex)

@@ -19,12 +19,18 @@ public class AiService : IAiLookupProvider, IDisposable
         };
     }
 
-    public async Task<(AiExplanationResult? Result, string? RawResponse, string? Error)> QueryAsync(
+    public Task<(AiExplanationResult? Result, string? RawResponse, string? Error)> QueryAsync(
         string text,
         CancellationToken cancellationToken = default)
     {
-        var settings = _settingsService.Load();
+        return QueryAsync(text, _settingsService.Load(), cancellationToken);
+    }
 
+    public async Task<(AiExplanationResult? Result, string? RawResponse, string? Error)> QueryAsync(
+        string text,
+        AppSettings settings,
+        CancellationToken cancellationToken = default)
+    {
         if (string.IsNullOrWhiteSpace(settings.AiApiKey))
         {
             return (null, null, "请先在设置中配置 API Key");
@@ -70,7 +76,7 @@ Keep responses concise. Example:
             {
                 Content = content
             };
-            request.Headers.Add("Authorization", $"Bearer {settings.AiApiKey}");
+            request.Headers.Add("Authorization", $"Bearer {settings.AiApiKey.Trim()}");
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
 
@@ -86,7 +92,7 @@ Keep responses concise. Example:
                 return (null, null, errorMsg);
             }
 
-            var responseBody = await response.Content.ReadAsStringAsync();
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!AiResponseParser.TryExtractAssistantContent(
                     responseBody, out var assistantContent, out var parseError))
             {
@@ -115,10 +121,16 @@ Keep responses concise. Example:
         }
     }
 
-    public async Task<bool> TestConnectionAsync()
+    /// <summary>
+    /// 用给定配置发起一次真实查询来测试连通性，不落盘。
+    /// 只要 API 正常返回了内容（即使 JSON 解析失败），就视为连接成功。
+    /// </summary>
+    public async Task<(bool Ok, string? Error)> TestConnectionAsync(AppSettings settings)
     {
-        var (result, _, error) = await QueryAsync("hello");
-        return result != null;
+        var (result, rawResponse, error) = await QueryAsync("hello", settings);
+        if (error != null)
+            return (false, error);
+        return (result != null || rawResponse != null, null);
     }
 
     public void Dispose()

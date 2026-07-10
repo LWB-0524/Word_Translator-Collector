@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Windows;
-using WordCollector.Helpers;
+using System.Windows.Interop;
+using WordCollector.NativeMethods;
 using WordCollector.Services;
 using WordCollector.ViewModels;
 using WordCollector.Views;
@@ -10,6 +11,8 @@ namespace WordCollector;
 public partial class App : Application
 {
     private static readonly Mutex SingleInstanceMutex = new(true, "WordCollector_SingleInstance_Mutex");
+    private static readonly uint ShowInstanceMessage =
+        Win32.RegisterWindowMessage("WordCollector.ShowExistingInstance");
     private static bool _ownsMutex;
     private bool _isShuttingDown;
 
@@ -40,11 +43,10 @@ public partial class App : Application
 
         if (!SingleInstanceMutex.WaitOne(TimeSpan.Zero, true))
         {
-            MessageBox.Show(
-                "WordCollector 已在运行中，请查看系统托盘。",
-                "WordCollector",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            // 通知已运行的实例显示主窗口，本实例静默退出。
+            if (ShowInstanceMessage != 0)
+                Win32.PostMessage(
+                    (IntPtr)Win32.HWND_BROADCAST, ShowInstanceMessage, IntPtr.Zero, IntPtr.Zero);
             _isShuttingDown = true;
             Shutdown();
             return;
@@ -123,19 +125,32 @@ public partial class App : Application
         }
 #endif
 
-        _trayService = new TrayService(_ttsService, _settingsService);
+        _trayService = new TrayService(_settingsService);
         _trayService.Initialize(
             _mainWindow,
             () => _mainViewModel.ShowReviewCommand.Execute(null),
             () => _mainViewModel.ShowSettingsCommand.Execute(null),
             DoExit);
 
-        _hotkeyService = new HotkeyService(_mainViewModel);
+        _hotkeyService = new HotkeyService(_mainViewModel, _settingsService);
         _mainWindow.SourceInitialized += (_, _) =>
         {
             var hotkeyWarning = _hotkeyService.Register(_mainWindow);
             if (hotkeyWarning != null)
                 _trayService.ShowBalloonTip("WordCollector 快捷键", hotkeyWarning);
+
+            // 监听来自后启动实例的广播，激活主窗口。
+            var handle = new WindowInteropHelper(_mainWindow).Handle;
+            if (handle != IntPtr.Zero)
+                HwndSource.FromHwnd(handle)?.AddHook(ShowInstanceHook);
+        };
+
+        // 设置里改动全局快捷键后即时重新注册。
+        _mainViewModel.HotkeysChanged += () =>
+        {
+            var warning = _hotkeyService?.ApplyFromSettings();
+            if (warning != null)
+                _trayService?.ShowBalloonTip("WordCollector 快捷键", warning);
         };
 
         _mainWindow.Closing += (_, args) =>
@@ -151,22 +166,25 @@ public partial class App : Application
         if (voiceHint != null)
             _trayService.ShowBalloonTip("WordCollector", voiceHint);
 
-        var settings = _settingsService.Load();
-        _mainWindow.Left = settings.WindowLeft;
-        _mainWindow.Top = settings.WindowTop;
-        var windowSize = WindowSizePolicy.Resolve(settings.WindowWidth, settings.WindowHeight);
-        _mainWindow.Width = windowSize.Width;
-        _mainWindow.Height = windowSize.Height;
-        _mainWindow.Topmost = settings.AlwaysOnTop;
+        // 窗口位置、尺寸和置顶状态已在 MainWindow 构造函数中根据设置初始化。
         _mainWindow.Show();
         _mainWindow.Activate();
-
     }
 
     public static void RequestExit()
     {
         if (Current is App app)
             app.DoExit();
+    }
+
+    private IntPtr ShowInstanceHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (ShowInstanceMessage != 0 && (uint)msg == ShowInstanceMessage)
+        {
+            _mainViewModel?.ShowWindow();
+            handled = true;
+        }
+        return IntPtr.Zero;
     }
 
     private void SaveWindowBounds()

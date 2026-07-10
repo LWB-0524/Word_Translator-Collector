@@ -40,6 +40,8 @@ public class SettingsViewModel : BaseViewModel
         ThemeMode = palette.Mode;
         AccentColor = palette.AccentCode;
         CtrlEnterBehavior = BehaviorOptions.ToDisplayCtrlEnterBehavior(settings.CtrlEnterBehavior);
+        ShowWindowHotkey = NormalizeHotkey(settings.ShowWindowHotkey, "Ctrl+Shift+Space");
+        QuickQueryHotkey = NormalizeHotkey(settings.QuickQueryHotkey, "Ctrl+Shift+Q");
 
         AvailableVoices = new ObservableCollection<string> { "自动" };
         try
@@ -113,6 +115,37 @@ public class SettingsViewModel : BaseViewModel
     private string _ctrlEnterBehavior = BehaviorOptions.ClearDisplayText;
     public string CtrlEnterBehavior { get => _ctrlEnterBehavior; set => SetProperty(ref _ctrlEnterBehavior, value); }
 
+    private string _showWindowHotkey = "Ctrl+Shift+Space";
+    public string ShowWindowHotkey
+    {
+        get => _showWindowHotkey;
+        set
+        {
+            if (SetProperty(ref _showWindowHotkey, value))
+                OnPropertyChanged(nameof(ShowWindowHotkeyDisplay));
+        }
+    }
+
+    private string _quickQueryHotkey = "Ctrl+Shift+Q";
+    public string QuickQueryHotkey
+    {
+        get => _quickQueryHotkey;
+        set
+        {
+            if (SetProperty(ref _quickQueryHotkey, value))
+                OnPropertyChanged(nameof(QuickQueryHotkeyDisplay));
+        }
+    }
+
+    public string ShowWindowHotkeyDisplay => ToHotkeyDisplay(ShowWindowHotkey);
+    public string QuickQueryHotkeyDisplay => ToHotkeyDisplay(QuickQueryHotkey);
+
+    private static string NormalizeHotkey(string? stored, string fallback) =>
+        HotkeyCombo.TryParse(stored, out var combo) ? combo.ToStorageString() : fallback;
+
+    private static string ToHotkeyDisplay(string? stored) =>
+        HotkeyCombo.TryParse(stored, out var combo) ? combo.DisplayText : "未设置";
+
     private string _themeMode = "light";
     public string ThemeMode { get => _themeMode; set => SetProperty(ref _themeMode, value); }
 
@@ -149,6 +182,23 @@ public class SettingsViewModel : BaseViewModel
             return;
         }
 
+        if (!HotkeyCombo.TryParse(ShowWindowHotkey, out var showCombo) ||
+            !HotkeyCombo.TryParse(QuickQueryHotkey, out var quickCombo))
+        {
+            MessageBox.Show(
+                "全局快捷键无效，请至少包含一个修饰键（Ctrl/Alt/Shift/Win）和一个主键。",
+                "设置无效", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (showCombo.ToStorageString().Equals(quickCombo.ToStorageString(), StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                "两个全局快捷键不能相同，请为它们设置不同的组合。",
+                "设置无效", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var settings = _settingsService.Load();
         settings.AiProvider = AiProvider;
         settings.AiApiKey = AiApiKey;
@@ -164,11 +214,14 @@ public class SettingsViewModel : BaseViewModel
         settings.ThemeMode = palette.Mode;
         settings.AccentColor = palette.AccentCode;
         settings.CtrlEnterBehavior = BehaviorOptions.ToStoredCtrlEnterBehavior(CtrlEnterBehavior);
+        settings.ShowWindowHotkey = showCombo.ToStorageString();
+        settings.QuickQueryHotkey = quickCombo.ToStorageString();
 
         _settingsService.Save(settings);
         _themeService.Apply(settings.ThemeMode, settings.AccentColor, persist: false);
         _ttsService.ApplySettings();
         _mainViewModel.RefreshSettings();
+        _mainViewModel.NotifyHotkeysChanged();
 
         MessageBox.Show("设置已保存", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
         await Task.CompletedTask;
@@ -182,25 +235,23 @@ public class SettingsViewModel : BaseViewModel
             return;
         }
 
-        var savedSettings = _settingsService.Load();
-        var originalProvider = savedSettings.AiProvider;
-        var originalKey = savedSettings.AiApiKey;
-        var originalUrl = savedSettings.AiBaseUrl;
-        var originalModel = savedSettings.AiModel;
+        // 用界面上的候选配置直接测试，不写入设置文件。
+        var candidate = _settingsService.Load().Copy();
+        candidate.AiProvider = AiProvider;
+        candidate.AiApiKey = AiApiKey;
+        candidate.AiBaseUrl = AiBaseUrl;
+        candidate.AiModel = AiModel;
 
-        savedSettings.AiProvider = AiProvider;
-        savedSettings.AiApiKey = AiApiKey;
-        savedSettings.AiBaseUrl = AiBaseUrl;
-        savedSettings.AiModel = AiModel;
         IsTesting = true;
         ConnectionStatus = "正在测试连接…";
 
         try
         {
-            _settingsService.Save(savedSettings);
             using var aiService = new AiService(_settingsService);
-            var ok = await aiService.TestConnectionAsync();
-            ConnectionStatus = ok ? "连接成功" : "连接失败，请检查 API Key、Base URL 和网络";
+            var (ok, error) = await aiService.TestConnectionAsync(candidate);
+            ConnectionStatus = ok
+                ? "连接成功"
+                : $"连接失败：{error ?? "请检查 API Key、Base URL 和网络"}";
         }
         catch (Exception ex)
         {
@@ -209,11 +260,6 @@ public class SettingsViewModel : BaseViewModel
         finally
         {
             IsTesting = false;
-            savedSettings.AiProvider = originalProvider;
-            savedSettings.AiApiKey = originalKey;
-            savedSettings.AiBaseUrl = originalUrl;
-            savedSettings.AiModel = originalModel;
-            _settingsService.Save(savedSettings);
         }
     }
 
@@ -241,9 +287,12 @@ public class SettingsViewModel : BaseViewModel
         ThemeMode = defaults.ThemeMode;
         AccentColor = defaults.AccentColor;
         CtrlEnterBehavior = BehaviorOptions.ToDisplayCtrlEnterBehavior(defaults.CtrlEnterBehavior);
+        ShowWindowHotkey = NormalizeHotkey(defaults.ShowWindowHotkey, "Ctrl+Shift+Space");
+        QuickQueryHotkey = NormalizeHotkey(defaults.QuickQueryHotkey, "Ctrl+Shift+Q");
 
         _ttsService.ApplySettings();
         _themeService.Apply(defaults.ThemeMode, defaults.AccentColor, persist: false);
         _mainViewModel.RefreshSettings();
+        _mainViewModel.NotifyHotkeysChanged();
     }
 }

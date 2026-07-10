@@ -21,6 +21,7 @@ public partial class ReviewWindow : Window
         WindowThemeHelper.ApplyNativeTitleBar(this, mainViewModel.ThemeMode);
 
         Loaded += (s, e) => _viewModel.Load();
+        Closed += (s, e) => _viewModel.Unload();
     }
 
     private void EntryListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

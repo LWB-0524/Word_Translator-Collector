@@ -28,6 +28,10 @@ public class AppSettings
     // Ctrl+Enter Behavior: "hide", "clear", "keep"
     public string CtrlEnterBehavior { get; set; } = "clear";
 
+    // Global Hotkeys (canonical form, e.g. "Ctrl+Shift+Space")
+    public string ShowWindowHotkey { get; set; } = "Ctrl+Shift+Space";
+    public string QuickQueryHotkey { get; set; } = "Ctrl+Shift+Q";
+
     // Window Position (saved on exit)
     public double WindowTop { get; set; } = 200;
     public double WindowLeft { get; set; } = 600;
@@ -53,6 +57,8 @@ public class AppSettings
             ThemeMode = "light",
             AccentColor = "blue",
             CtrlEnterBehavior = "clear",
+            ShowWindowHotkey = "Ctrl+Shift+Space",
+            QuickQueryHotkey = "Ctrl+Shift+Q",
             WindowTop = 200,
             WindowLeft = 600,
             WindowWidth = WindowSizePolicy.DefaultWidth,

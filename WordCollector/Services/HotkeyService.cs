@@ -1,6 +1,6 @@
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using WordCollector.Helpers;
 using WordCollector.NativeMethods;
 using WordCollector.ViewModels;
 
@@ -10,6 +10,8 @@ public class HotkeyService : IDisposable
 {
     private HwndSource? _hwndSource;
     private readonly MainViewModel _mainViewModel;
+    private readonly SettingsService _settingsService;
+    private readonly Dictionary<int, GlobalHotkeyAction> _actionsById = new();
     private readonly HashSet<int> _registeredHotkeyIds = new();
 
     internal static IReadOnlyList<GlobalHotkeyDefinition> GlobalHotkeys { get; } =
@@ -17,26 +19,25 @@ public class HotkeyService : IDisposable
         {
             new GlobalHotkeyDefinition(
                 9001,
-                Win32.MOD_CONTROL | Win32.MOD_SHIFT,
-                Win32.VK_SPACE,
-                "Ctrl+Shift+Space",
-                GlobalHotkeyAction.ShowWindow),
+                GlobalHotkeyAction.ShowWindow,
+                ParseOrThrow("Ctrl+Shift+Space"),
+                "显示窗口"),
             new GlobalHotkeyDefinition(
                 9004,
-                Win32.MOD_CONTROL | Win32.MOD_SHIFT,
-                Win32.VK_Q,
-                "Ctrl+Shift+Q",
-                GlobalHotkeyAction.QuickQuery)
+                GlobalHotkeyAction.QuickQuery,
+                ParseOrThrow("Ctrl+Shift+Q"),
+                "查询剪贴板")
         };
 
-    public HotkeyService(MainViewModel mainViewModel)
+    public HotkeyService(MainViewModel mainViewModel, SettingsService settingsService)
     {
         _mainViewModel = mainViewModel;
+        _settingsService = settingsService;
     }
 
     public string? Register(Window window)
     {
-        if (_hwndSource != null) return null;
+        if (_hwndSource != null) return ApplyFromSettings();
 
         var handle = new WindowInteropHelper(window).Handle;
         if (handle == IntPtr.Zero) return "无法获取窗口句柄，未能注册全局快捷键";
@@ -44,23 +45,53 @@ public class HotkeyService : IDisposable
         _hwndSource = HwndSource.FromHwnd(handle);
         _hwndSource?.AddHook(WndProc);
 
+        return ApplyFromSettings();
+    }
+
+    /// <summary>
+    /// 根据当前设置（重新）注册所有全局快捷键。设置变化后调用即可热更新，无需重启。
+    /// 返回被占用/无法注册的快捷键提示，全部成功时返回 null。
+    /// </summary>
+    public string? ApplyFromSettings()
+    {
+        if (_hwndSource == null) return null;
+        var handle = _hwndSource.Handle;
+        if (handle == IntPtr.Zero) return null;
+
+        foreach (var hotkeyId in _registeredHotkeyIds)
+            Win32.UnregisterHotKey(handle, hotkeyId);
+        _registeredHotkeyIds.Clear();
+        _actionsById.Clear();
+
+        var settings = _settingsService.Load();
         var failedHotkeys = new List<string>();
+
         foreach (var definition in GlobalHotkeys)
         {
-            if (Win32.RegisterHotKey(
-                    handle, definition.Id, definition.Modifiers, (uint)definition.VirtualKey))
-            {
+            var combo = ResolveCombo(settings, definition);
+            _actionsById[definition.Id] = definition.Action;
+
+            if (Win32.RegisterHotKey(handle, definition.Id, combo.Modifiers, combo.VirtualKey))
                 _registeredHotkeyIds.Add(definition.Id);
-            }
             else
-            {
-                failedHotkeys.Add(definition.DisplayText);
-            }
+                failedHotkeys.Add($"{definition.Label}（{combo.DisplayText}）");
         }
 
         return failedHotkeys.Count == 0
             ? null
-            : $"以下快捷键被其他程序占用：{string.Join("、", failedHotkeys)}";
+            : $"以下快捷键无法注册，可能被其他程序占用：{string.Join("、", failedHotkeys)}";
+    }
+
+    private static HotkeyCombo ResolveCombo(Models.AppSettings settings, GlobalHotkeyDefinition definition)
+    {
+        var raw = definition.Action switch
+        {
+            GlobalHotkeyAction.ShowWindow => settings.ShowWindowHotkey,
+            GlobalHotkeyAction.QuickQuery => settings.QuickQueryHotkey,
+            _ => null
+        };
+
+        return HotkeyCombo.TryParse(raw, out var combo) ? combo : definition.DefaultCombo;
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -71,8 +102,10 @@ public class HotkeyService : IDisposable
 
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
-                var definition = GlobalHotkeys.FirstOrDefault(item => item.Id == hotkeyId);
-                switch (definition?.Action)
+                if (!_actionsById.TryGetValue(hotkeyId, out var action))
+                    return;
+
+                switch (action)
                 {
                     case GlobalHotkeyAction.ShowWindow:
                         _mainViewModel.ShowWindowCommand.Execute(null);
@@ -103,12 +136,18 @@ public class HotkeyService : IDisposable
         _hwndSource.RemoveHook(WndProc);
         _hwndSource = null;
         _registeredHotkeyIds.Clear();
+        _actionsById.Clear();
     }
 
     public void Dispose()
     {
         Unregister();
     }
+
+    private static HotkeyCombo ParseOrThrow(string combo) =>
+        HotkeyCombo.TryParse(combo, out var parsed)
+            ? parsed
+            : throw new ArgumentException($"内置默认快捷键无效：{combo}");
 }
 
 internal enum GlobalHotkeyAction
@@ -119,7 +158,6 @@ internal enum GlobalHotkeyAction
 
 internal sealed record GlobalHotkeyDefinition(
     int Id,
-    uint Modifiers,
-    int VirtualKey,
-    string DisplayText,
-    GlobalHotkeyAction Action);
+    GlobalHotkeyAction Action,
+    HotkeyCombo DefaultCombo,
+    string Label);
