@@ -63,17 +63,13 @@ public class DatabaseService
         using var command = new SqliteCommand(createTableSql, connection);
         command.ExecuteNonQuery();
 
-        // Add phonetic column (migration for existing databases)
-        try
-        {
-            using var phoneticCmd = new SqliteCommand(
-                "ALTER TABLE vocabulary_items ADD COLUMN phonetic TEXT;", connection);
-            phoneticCmd.ExecuteNonQuery();
-        }
-        catch
-        {
-            // Column already exists — ignore
-        }
+        // Column migrations for databases created by earlier versions.
+        TryAddColumn(connection, "phonetic TEXT");
+        TryAddColumn(connection, "review_repetitions INTEGER DEFAULT 0");
+        TryAddColumn(connection, "review_interval_days INTEGER DEFAULT 0");
+        TryAddColumn(connection, "review_ease_factor REAL DEFAULT 2.5");
+        TryAddColumn(connection, "next_review_date TEXT");
+        TryAddColumn(connection, "last_reviewed_at TEXT");
 
         // Create index for dedup lookups
         const string createIndexSql = @"
@@ -82,6 +78,26 @@ public class DatabaseService
         ";
         using var idxCommand = new SqliteCommand(createIndexSql, connection);
         idxCommand.ExecuteNonQuery();
+
+        // Index to speed up the "due for review" query.
+        using var reviewIdxCommand = new SqliteCommand(
+            "CREATE INDEX IF NOT EXISTS idx_next_review ON vocabulary_items(next_review_date);",
+            connection);
+        reviewIdxCommand.ExecuteNonQuery();
+    }
+
+    private static void TryAddColumn(SqliteConnection connection, string columnDefinition)
+    {
+        try
+        {
+            using var command = new SqliteCommand(
+                $"ALTER TABLE vocabulary_items ADD COLUMN {columnDefinition};", connection);
+            command.ExecuteNonQuery();
+        }
+        catch
+        {
+            // Column already exists — ignore.
+        }
     }
 
     public VocabularyItem? FindByNormalizedTextAndDate(string normalizedText, string date)
@@ -158,12 +174,16 @@ public class DatabaseService
             (text, normalized_text, item_type, phonetic, meaning_zh, brief_explanation,
              detailed_explanation, example_en, example_zh, key_expressions_json,
              raw_ai_response, date_added, created_at, updated_at, lookup_count,
-             familiarity, spoken_count, last_spoken_at)
+             familiarity, spoken_count, last_spoken_at,
+             review_repetitions, review_interval_days, review_ease_factor,
+             next_review_date, last_reviewed_at)
             VALUES
             (@text, @normalized_text, @item_type, @phonetic, @meaning_zh, @brief_explanation,
              @detailed_explanation, @example_en, @example_zh, @key_expressions_json,
              @raw_ai_response, @date_added, @created_at, @updated_at, @lookup_count,
-             @familiarity, @spoken_count, @last_spoken_at);
+             @familiarity, @spoken_count, @last_spoken_at,
+             @review_repetitions, @review_interval_days, @review_ease_factor,
+             @next_review_date, @last_reviewed_at);
             SELECT last_insert_rowid();
         ";
 
@@ -411,6 +431,160 @@ public class DatabaseService
         return null;
     }
 
+    /// <summary>返回到期（next_review_date 为空或不晚于 today）的词条，用于间隔重复复习。</summary>
+    public List<VocabularyItem> GetDueForReview(string today, int limit = 100)
+    {
+        var items = new List<VocabularyItem>();
+
+        try
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            const string sql = @"
+                SELECT * FROM vocabulary_items
+                WHERE next_review_date IS NULL OR next_review_date <= @today
+                ORDER BY (next_review_date IS NULL) DESC, next_review_date ASC, date_added ASC
+                LIMIT @limit;
+            ";
+
+            using var command = new SqliteCommand(sql, connection);
+            command.Parameters.AddWithValue("@today", today);
+            command.Parameters.AddWithValue("@limit", limit);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+                items.Add(ReadVocabularyItem(reader));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"DB GetDueForReview error: {ex.Message}");
+        }
+
+        return items;
+    }
+
+    public int GetDueCount(string today)
+    {
+        try
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            const string sql = @"
+                SELECT COUNT(*) FROM vocabulary_items
+                WHERE next_review_date IS NULL OR next_review_date <= @today;
+            ";
+
+            using var command = new SqliteCommand(sql, connection);
+            command.Parameters.AddWithValue("@today", today);
+            return Convert.ToInt32(command.ExecuteScalar());
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"DB GetDueCount error: {ex.Message}");
+            return 0;
+        }
+    }
+
+    public void UpdateReviewState(VocabularyItem item)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        const string sql = @"
+            UPDATE vocabulary_items
+            SET review_repetitions = @reps, review_interval_days = @interval,
+                review_ease_factor = @ease, next_review_date = @next,
+                last_reviewed_at = @last, familiarity = @familiarity
+            WHERE id = @id;
+        ";
+
+        using var command = new SqliteCommand(sql, connection);
+        command.Parameters.AddWithValue("@reps", item.ReviewRepetitions);
+        command.Parameters.AddWithValue("@interval", item.ReviewIntervalDays);
+        command.Parameters.AddWithValue("@ease", item.ReviewEaseFactor);
+        command.Parameters.AddWithValue("@next", item.NextReviewDate ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@last", item.LastReviewedAt ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@familiarity", item.Familiarity);
+        command.Parameters.AddWithValue("@id", item.Id);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>汇总词库统计信息（用于统计面板）。</summary>
+    public VocabularyStatistics GetStatistics(string today)
+    {
+        try
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            const string aggregateSql = @"
+                SELECT
+                    COUNT(*),
+                    COALESCE(SUM(CASE WHEN item_type = 'word' THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN item_type = 'phrase' THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN item_type = 'sentence' THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN familiarity = 0 THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN familiarity = 1 THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN familiarity = 2 THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(lookup_count), 0),
+                    COALESCE(SUM(spoken_count), 0)
+                FROM vocabulary_items;
+            ";
+
+            int total = 0, words = 0, phrases = 0, sentences = 0;
+            int fresh = 0, learning = 0, mastered = 0, lookups = 0, spoken = 0;
+
+            using (var command = new SqliteCommand(aggregateSql, connection))
+            using (var reader = command.ExecuteReader())
+            {
+                if (reader.Read())
+                {
+                    total = reader.GetInt32(0);
+                    words = reader.GetInt32(1);
+                    phrases = reader.GetInt32(2);
+                    sentences = reader.GetInt32(3);
+                    fresh = reader.GetInt32(4);
+                    learning = reader.GetInt32(5);
+                    mastered = reader.GetInt32(6);
+                    lookups = reader.GetInt32(7);
+                    spoken = reader.GetInt32(8);
+                }
+            }
+
+            var dates = new List<string>();
+            using (var datesCommand = new SqliteCommand(
+                "SELECT DISTINCT date_added FROM vocabulary_items;", connection))
+            using (var reader = datesCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                    dates.Add(reader.GetString(0));
+            }
+
+            int due;
+            using (var dueCommand = new SqliteCommand(
+                "SELECT COUNT(*) FROM vocabulary_items WHERE next_review_date IS NULL OR next_review_date <= @today;",
+                connection))
+            {
+                dueCommand.Parameters.AddWithValue("@today", today);
+                due = Convert.ToInt32(dueCommand.ExecuteScalar());
+            }
+
+            var streak = StatisticsCalculator.CalculateStreak(dates, DateTime.Now);
+
+            return new VocabularyStatistics(
+                total, words, phrases, sentences,
+                fresh, learning, mastered, lookups, spoken,
+                dates.Count, streak, due);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"DB GetStatistics error: {ex.Message}");
+            return VocabularyStatistics.Empty;
+        }
+    }
+
     private static VocabularyItem ReadVocabularyItem(SqliteDataReader reader)
     {
         return new VocabularyItem
@@ -433,8 +607,33 @@ public class DatabaseService
             LookupCount = reader.GetInt32(reader.GetOrdinal("lookup_count")),
             Familiarity = reader.GetInt32(reader.GetOrdinal("familiarity")),
             SpokenCount = reader.GetInt32(reader.GetOrdinal("spoken_count")),
-            LastSpokenAt = reader.IsDBNull(reader.GetOrdinal("last_spoken_at")) ? null : reader.GetString(reader.GetOrdinal("last_spoken_at"))
+            LastSpokenAt = reader.IsDBNull(reader.GetOrdinal("last_spoken_at")) ? null : reader.GetString(reader.GetOrdinal("last_spoken_at")),
+            ReviewRepetitions = TryGetInt(reader, "review_repetitions", 0),
+            ReviewIntervalDays = TryGetInt(reader, "review_interval_days", 0),
+            ReviewEaseFactor = TryGetDouble(reader, "review_ease_factor", 2.5),
+            NextReviewDate = TryGetString(reader, "next_review_date"),
+            LastReviewedAt = TryGetString(reader, "last_reviewed_at")
         };
+    }
+
+    private static int TryGetInt(SqliteDataReader reader, string column, int fallback)
+    {
+        try
+        {
+            var idx = reader.GetOrdinal(column);
+            return reader.IsDBNull(idx) ? fallback : reader.GetInt32(idx);
+        }
+        catch { return fallback; }
+    }
+
+    private static double TryGetDouble(SqliteDataReader reader, string column, double fallback)
+    {
+        try
+        {
+            var idx = reader.GetOrdinal(column);
+            return reader.IsDBNull(idx) ? fallback : reader.GetDouble(idx);
+        }
+        catch { return fallback; }
     }
 
     private static string EscapeLikePattern(string text) =>
@@ -470,5 +669,10 @@ public class DatabaseService
         command.Parameters.AddWithValue("@familiarity", item.Familiarity);
         command.Parameters.AddWithValue("@spoken_count", item.SpokenCount);
         command.Parameters.AddWithValue("@last_spoken_at", item.LastSpokenAt ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@review_repetitions", item.ReviewRepetitions);
+        command.Parameters.AddWithValue("@review_interval_days", item.ReviewIntervalDays);
+        command.Parameters.AddWithValue("@review_ease_factor", item.ReviewEaseFactor);
+        command.Parameters.AddWithValue("@next_review_date", item.NextReviewDate ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@last_reviewed_at", item.LastReviewedAt ?? (object)DBNull.Value);
     }
 }

@@ -5,7 +5,7 @@ using WordCollector.Models;
 
 namespace WordCollector.Services;
 
-public sealed class DictionaryLookupService : IDictionaryLookupProvider, IDisposable
+public sealed class DictionaryLookupService : IDictionaryLookupProvider, IDictionarySource, IDisposable
 {
     private readonly HttpClient _httpClient;
 
@@ -19,7 +19,10 @@ public sealed class DictionaryLookupService : IDictionaryLookupProvider, IDispos
         _httpClient = httpClient;
     }
 
+    public string Name => "开放词典 (dictionaryapi.dev + MyMemory)";
+
     bool IDictionaryLookupProvider.CanLookup(string text) => CanLookup(text);
+    bool IDictionarySource.CanLookup(string text) => CanLookup(text);
 
     public static bool CanLookup(string text) => CanLookupWord(text);
 
