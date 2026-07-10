@@ -61,7 +61,69 @@ public class DatabaseServiceIntegrationTests
         });
     }
 
-    private static VocabularyItem NewItem(string text, string meaning, int familiarity = 0) =>
+    [Fact]
+    public void GetDueForReview_ReturnsNullAndPastDatesButNotFuture()
+    {
+        WithService(service =>
+        {
+            service.Insert(NewItem("due-null", "空日期即到期")); // next_review_date 默认 null
+            service.Insert(NewItem("due-past", "过去日期", nextReviewDate: "2026-07-01"));
+            service.Insert(NewItem("not-due", "未来日期", nextReviewDate: "2026-07-20"));
+
+            var due = service.GetDueForReview("2026-07-10");
+            var texts = due.Select(i => i.Text).ToList();
+
+            Assert.Contains("due-null", texts);
+            Assert.Contains("due-past", texts);
+            Assert.DoesNotContain("not-due", texts);
+            Assert.Equal(2, service.GetDueCount("2026-07-10"));
+        });
+    }
+
+    [Fact]
+    public void UpdateReviewState_PersistsSrsFieldsAndFamiliarity()
+    {
+        WithService(service =>
+        {
+            var id = service.Insert(NewItem("card", "词条"));
+            var item = service.GetById(id)!;
+            item.ReviewRepetitions = 3;
+            item.ReviewIntervalDays = 17;
+            item.ReviewEaseFactor = 2.62;
+            item.NextReviewDate = "2026-07-27";
+            item.LastReviewedAt = "2026-07-10 09:00:00";
+            item.Familiarity = 2;
+
+            service.UpdateReviewState(item);
+            var reloaded = service.GetById(id)!;
+
+            Assert.Equal(3, reloaded.ReviewRepetitions);
+            Assert.Equal(17, reloaded.ReviewIntervalDays);
+            Assert.Equal(2.62, reloaded.ReviewEaseFactor, 3);
+            Assert.Equal("2026-07-27", reloaded.NextReviewDate);
+            Assert.Equal(2, reloaded.Familiarity);
+        });
+    }
+
+    [Fact]
+    public void GetStatistics_AggregatesCountsAndDue()
+    {
+        WithService(service =>
+        {
+            service.Insert(NewItem("a", "甲", familiarity: 2));
+            service.Insert(NewItem("b", "乙", familiarity: 0));
+            service.Insert(NewItem("c", "丙", familiarity: 2, nextReviewDate: "2026-07-20"));
+
+            var stats = service.GetStatistics("2026-07-10");
+
+            Assert.Equal(3, stats.TotalItems);
+            Assert.Equal(2, stats.MasteredCount);
+            Assert.Equal(2, stats.DueToday); // a、b 到期（null），c 未来
+        });
+    }
+
+    private static VocabularyItem NewItem(
+        string text, string meaning, int familiarity = 0, string? nextReviewDate = null) =>
         new()
         {
             Text = text,
@@ -69,6 +131,7 @@ public class DatabaseServiceIntegrationTests
             ItemType = "phrase",
             MeaningZh = meaning,
             Familiarity = familiarity,
+            NextReviewDate = nextReviewDate,
             DateAdded = "2026-06-30",
             CreatedAt = "2026-06-30 12:00:00"
         };

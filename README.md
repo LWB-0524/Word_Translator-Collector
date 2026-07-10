@@ -7,9 +7,11 @@ Designed for non-native English speakers to seamlessly translate and save on-scr
 ## 功能
 
 - **快速查询**：紧凑置顶小窗，输入单词、词组或句子，回车查询
-- **三级查询管线**：本地词库缓存 → 免费词典 API（dictionaryapi.dev + MyMemory 翻译）→ AI 兜底（OpenAI / DeepSeek / 自定义 OpenAI 兼容接口）
+- **三级查询管线**：本地词库缓存 → 可插拔词典源（默认 dictionaryapi.dev + MyMemory 翻译）→ AI 兜底（OpenAI / DeepSeek / 自定义 OpenAI 兼容接口）。词典源实现 `IDictionarySource` 接口，按注册顺序尝试，新增来源只需加入组合列表
 - **自动沉淀**：查询结果自动保存到当日词库（SQLite），重复查询累计次数
-- **每日复盘**：按日期回看、搜索、标记熟悉度（陌生/学习中/已掌握）、编辑词条、导出 Markdown / CSV
+- **每日复盘**：按日期回看、搜索、按熟悉度筛选、跨全部日期搜索、标记熟悉度、编辑词条、导出 Markdown / CSV
+- **间隔重复复习（SRS）**：基于 SM-2 算法安排复习计划，"开始复习"进入复习模式，按「忘记 / 模糊 / 记得」评分自动排定下次复习时间
+- **统计面板**：复盘窗口顶部展示总词条、今日待复习、连续打卡天数、已掌握数量、学习天数
 - **朗读**：Windows 语音合成朗读英文，支持语速和语音选择，可查询后自动朗读
 - **全局热键**：`Ctrl+Shift+Space` 唤起主窗口；`Ctrl+Shift+Q` 直接查询剪贴板内容（两者均可在设置中自定义，保存后即时生效）
 - **系统托盘**：关闭窗口最小化到托盘，双击图标唤回

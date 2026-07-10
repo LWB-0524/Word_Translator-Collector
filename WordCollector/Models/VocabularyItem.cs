@@ -66,6 +66,16 @@ public class VocabularyItem : INotifyPropertyChanged
 
     public string? LastSpokenAt { get; set; }
 
+    // 间隔重复（SM-2）状态
+    public int ReviewRepetitions { get; set; } = 0;
+    public int ReviewIntervalDays { get; set; } = 0;
+    public double ReviewEaseFactor { get; set; } = 2.5;
+
+    private string? _nextReviewDate;
+    public string? NextReviewDate { get => _nextReviewDate; set => SetField(ref _nextReviewDate, value); }
+
+    public string? LastReviewedAt { get; set; }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

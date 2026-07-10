@@ -32,6 +32,9 @@ public class ReviewViewModel : BaseViewModel
         ExportCsvCommand = new RelayCommand(ExportCsv);
         SaveEditCommand = new RelayCommand<VocabularyItem>(SaveEdit);
         RefreshCommand = new RelayCommand(Refresh);
+        StartReviewCommand = new RelayCommand(StartReview);
+        ExitReviewCommand = new RelayCommand(ExitReview);
+        GradeReviewCommand = new RelayCommand<string>(GradeReview);
 
         SelectedDate = DateTime.Now.ToString("yyyy-MM-dd");
     }
@@ -105,6 +108,22 @@ public class ReviewViewModel : BaseViewModel
     private bool _isSpeaking;
     public bool IsSpeaking { get => _isSpeaking; set => SetProperty(ref _isSpeaking, value); }
 
+    private bool _isReviewMode;
+    public bool IsReviewMode
+    {
+        get => _isReviewMode;
+        private set
+        {
+            if (SetProperty(ref _isReviewMode, value))
+                OnPropertyChanged(nameof(IsBrowseMode));
+        }
+    }
+
+    public bool IsBrowseMode => !IsReviewMode;
+
+    private VocabularyStatistics _statistics = VocabularyStatistics.Empty;
+    public VocabularyStatistics Statistics { get => _statistics; private set => SetProperty(ref _statistics, value); }
+
     public ICommand LoadTodayCommand { get; }
     public ICommand LoadDateCommand { get; }
     public ICommand SearchCommand { get; }
@@ -116,6 +135,9 @@ public class ReviewViewModel : BaseViewModel
     public ICommand ExportCsvCommand { get; }
     public ICommand SaveEditCommand { get; }
     public ICommand RefreshCommand { get; }
+    public ICommand StartReviewCommand { get; }
+    public ICommand ExitReviewCommand { get; }
+    public ICommand GradeReviewCommand { get; }
 
     public void Load()
     {
@@ -131,6 +153,13 @@ public class ReviewViewModel : BaseViewModel
         foreach (var date in _databaseService.GetDistinctDates())
             Dates.Add(date);
         LoadToday();
+        RefreshStatistics();
+    }
+
+    private void RefreshStatistics()
+    {
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        Statistics = _databaseService.GetStatistics(today);
     }
 
     /// <summary>
@@ -230,6 +259,84 @@ public class ReviewViewModel : BaseViewModel
             Search();
     }
 
+    private void StartReview()
+    {
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        _allEntries = _databaseService.GetDueForReview(today);
+        Entries = new ObservableCollection<VocabularyItem>(_allEntries);
+        IsReviewMode = true;
+
+        if (Entries.Count == 0)
+        {
+            ClearSelection();
+            StatusText = "太棒了，今天没有需要复习的内容 🎉";
+            return;
+        }
+
+        SelectEntry(Entries[0]);
+        StatusText = $"复习模式 · 待复习 {Entries.Count} 个";
+    }
+
+    private void ExitReview()
+    {
+        IsReviewMode = false;
+        ClearSelection();
+        Refresh();
+        RefreshStatistics();
+    }
+
+    private void GradeReview(string? gradeText)
+    {
+        var item = SelectedEntry;
+        if (item == null) return;
+
+        var grade = gradeText switch
+        {
+            "forgot" => ReviewGrade.Forgot,
+            "hard" => ReviewGrade.Hard,
+            _ => ReviewGrade.Good
+        };
+
+        try
+        {
+            var next = SpacedRepetitionScheduler.Advance(
+                item.ReviewRepetitions, item.ReviewIntervalDays, item.ReviewEaseFactor,
+                grade, DateTime.Now);
+            item.ReviewRepetitions = next.Repetitions;
+            item.ReviewIntervalDays = next.IntervalDays;
+            item.ReviewEaseFactor = next.EaseFactor;
+            item.NextReviewDate = next.NextReviewDate;
+            item.LastReviewedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            item.Familiarity = grade switch
+            {
+                ReviewGrade.Forgot => 0,
+                ReviewGrade.Hard => 1,
+                _ => 2
+            };
+            _databaseService.UpdateReviewState(item);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"评分失败：{ex.Message}";
+            return;
+        }
+
+        var index = Entries.IndexOf(item);
+        Entries.Remove(item);
+        _allEntries.Remove(item);
+        RefreshStatistics();
+
+        if (Entries.Count == 0)
+        {
+            ClearSelection();
+            StatusText = "复习完成，全部过了一遍 🎉";
+            return;
+        }
+
+        SelectEntry(Entries[Math.Min(index, Entries.Count - 1)]);
+        StatusText = $"已评分 · 剩余 {Entries.Count} 个";
+    }
+
     private void Delete(VocabularyItem? item)
     {
         if (item == null) return;
@@ -247,6 +354,7 @@ public class ReviewViewModel : BaseViewModel
             Entries.Remove(item);
             if (SelectedEntry?.Id == item.Id)
                 ClearSelection();
+            RefreshStatistics();
             StatusText = "已删除";
         }
         catch (Exception ex)
@@ -283,6 +391,7 @@ public class ReviewViewModel : BaseViewModel
         {
             item.Familiarity = level;
             _databaseService.Update(item);
+            RefreshStatistics();
         }
         catch (Exception ex)
         {

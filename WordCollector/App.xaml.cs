@@ -24,7 +24,7 @@ public partial class App : Application
     private SettingsService? _settingsService;
     private ThemeService? _themeService;
     private AiService? _aiService;
-    private DictionaryLookupService? _dictionaryLookupService;
+    private CompositeDictionaryProvider? _dictionaryProvider;
     private LookupService? _lookupService;
 #if DEBUG
     private string? _visualQaScreen;
@@ -62,8 +62,12 @@ public partial class App : Application
             databaseService = new DatabaseService();
             _ttsService = new TextToSpeechService(_settingsService);
             _aiService = new AiService(_settingsService);
-            _dictionaryLookupService = new DictionaryLookupService();
-            _lookupService = new LookupService(databaseService, _dictionaryLookupService, _aiService);
+            // 词典来源可插拔：按顺序尝试，新增来源只需加入此列表。
+            _dictionaryProvider = new CompositeDictionaryProvider(new IDictionarySource[]
+            {
+                new DictionaryLookupService()
+            });
+            _lookupService = new LookupService(databaseService, _dictionaryProvider, _aiService);
 
 #if DEBUG
             if (!string.IsNullOrWhiteSpace(_visualQaScreen))
@@ -208,7 +212,7 @@ public partial class App : Application
             _ttsService?.Stop();
             _ttsService?.Dispose();
             _aiService?.Dispose();
-            _dictionaryLookupService?.Dispose();
+            _dictionaryProvider?.Dispose();
             _hotkeyService?.Dispose();
             _trayService?.Dispose();
             SaveWindowBounds();
@@ -228,7 +232,7 @@ public partial class App : Application
         _trayService?.Dispose();
         _ttsService?.Dispose();
         _aiService?.Dispose();
-        _dictionaryLookupService?.Dispose();
+        _dictionaryProvider?.Dispose();
 
         if (_ownsMutex)
         {
