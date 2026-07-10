@@ -23,9 +23,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Restore
-        run: dotnet restore
-
+      # test / publish 会隐式还原各自的项目；仓库根目录没有 .sln，故不单独 restore。
       - name: Test
         run: dotnet test WordCollector.Tests/WordCollector.Tests.csproj -c Release --nologo
 
