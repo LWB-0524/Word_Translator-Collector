@@ -84,18 +84,29 @@
                           IsEditable="True" Width="132" Height="38" Margin="0,0,8,0"
                           Style="{StaticResource ModernComboBox}" SelectionChanged="Date_Changed"/>
                 <Button Content="今天" Style="{StaticResource ToolbarButton}"
-                        Command="{Binding LoadTodayCommand}" Height="38" Margin="0,0,14,0"/>
+                        Command="{Binding LoadTodayCommand}" Height="38" Margin="0,0,10,0"/>
+                <CheckBox Content="全部日期" IsChecked="{Binding SearchAllDates}"
+                          VerticalAlignment="Center" FontSize="13"
+                          Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,14,0"
+                          ToolTip="跨所有日期搜索，忽略上方选中的日期"/>
 
                 <Border Width="1" Height="26" Background="{DynamicResource BorderBrush}" Margin="0,0,14,0"/>
                 <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                          Width="168" Height="38" Margin="0,0,8,0" VerticalContentAlignment="Center"
-                         Style="{StaticResource ModernTextBox}" ToolTip="搜索英文或中文释义"/>
+                         Style="{StaticResource ModernTextBox}" ToolTip="搜索英文或中文释义">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Enter" Command="{Binding SearchCommand}"/>
+                    </TextBox.InputBindings>
+                </TextBox>
                 <Button Content="搜索" Style="{StaticResource ToolbarButton}"
                         Command="{Binding SearchCommand}" Height="38" Margin="0,0,14,0"/>
 
                 <ComboBox ItemsSource="{Binding ItemTypeOptions}" SelectedItem="{Binding SelectedType}"
                           Width="92" Height="38" Margin="0,0,8,0"
                           Style="{StaticResource ModernComboBox}" SelectionChanged="ItemType_Changed"/>
+                <ComboBox ItemsSource="{Binding FamiliarityOptions}" SelectedItem="{Binding SelectedFamiliarity}"
+                          Width="100" Height="38" Margin="0,0,8,0"
+                          Style="{StaticResource ModernComboBox}" ToolTip="按熟悉程度筛选"/>
                 <ComboBox ItemsSource="{Binding SortModeOptions}" SelectedItem="{Binding SortMode}"
                           Width="122" Height="38" Margin="0,0,14,0"
                           Style="{StaticResource ModernComboBox}" SelectionChanged="SortMode_Changed"/>

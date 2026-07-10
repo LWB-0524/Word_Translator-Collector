@@ -2,7 +2,7 @@ using System.Speech.Synthesis;
 
 namespace WordCollector.Services;
 
-public class TextToSpeechService
+public class TextToSpeechService : IDisposable
 {
     private readonly SpeechSynthesizer _synthesizer;
     private readonly SettingsService _settingsService;
@@ -114,12 +114,7 @@ public class TextToSpeechService
             if (!settings.TtsEnabled)
                 return;
 
-            if (_isSpeaking)
-            {
-                Stop();
-                return;
-            }
-
+            // 若正在朗读则直接取消并朗读新内容；“再按一次停止”的切换语义由调用方负责。
             ApplySettings();
             _synthesizer.SpeakAsyncCancelAll();
             _synthesizer.SpeakAsync(text);

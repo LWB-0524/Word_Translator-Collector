@@ -19,11 +19,13 @@ public partial class MainWindow : Window
         viewModel.SetOwnerWindow(this);
 
         var settings = viewModel.SettingsService.Load();
-        Left = settings.WindowLeft;
-        Top = settings.WindowTop;
         var windowSize = WindowSizePolicy.Resolve(settings.WindowWidth, settings.WindowHeight);
         Width = windowSize.Width;
         Height = windowSize.Height;
+        (Left, Top) = WindowSizePolicy.ClampToScreen(
+            settings.WindowLeft, settings.WindowTop, windowSize.Width, windowSize.Height,
+            SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
 
         viewModel.RefreshSettings();
         UpdatePinButton();
@@ -41,16 +43,7 @@ public partial class MainWindow : Window
             viewModel.RefreshSettings();
         };
 
-        Closing += (_, _) =>
-        {
-            var latestSettings = viewModel.SettingsService.Load();
-            latestSettings.WindowLeft = Left;
-            latestSettings.WindowTop = Top;
-            latestSettings.WindowWidth = Width;
-            latestSettings.WindowHeight = Height;
-            viewModel.SettingsService.Save(latestSettings);
-        };
-
+        // 窗口边界的保存统一由 App 的 Closing 处理（App.SaveWindowBounds）。
     }
 
     private void UpdatePinButton()

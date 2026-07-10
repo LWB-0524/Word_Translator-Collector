@@ -36,4 +36,49 @@ public class WindowSizePolicyTests
         Assert.Equal(400, size.Width);
         Assert.Equal(280, size.Height);
     }
+
+    [Fact]
+    public void ClampToScreen_KeepsPositionInsideScreenUnchanged()
+    {
+        var (left, top) = WindowSizePolicy.ClampToScreen(
+            600, 200, 440, 320,
+            0, 0, 1920, 1080);
+
+        Assert.Equal(600, left);
+        Assert.Equal(200, top);
+    }
+
+    [Fact]
+    public void ClampToScreen_PullsBackWindowLostBeyondRightEdge()
+    {
+        // 例如原本在第二台显示器上，拔掉后位置超出了当前虚拟屏幕。
+        var (left, top) = WindowSizePolicy.ClampToScreen(
+            2500, 3000, 440, 320,
+            0, 0, 1920, 1080);
+
+        Assert.True(left <= 1920 - 48);
+        Assert.True(top <= 1080 - 48);
+    }
+
+    [Fact]
+    public void ClampToScreen_PullsBackWindowLostBeyondLeftAndTopEdge()
+    {
+        var (left, top) = WindowSizePolicy.ClampToScreen(
+            -5000, -400, 440, 320,
+            0, 0, 1920, 1080);
+
+        Assert.True(left >= 48 - 440);
+        Assert.Equal(0, top);
+    }
+
+    [Fact]
+    public void ClampToScreen_ReplacesNaNWithScreenOrigin()
+    {
+        var (left, top) = WindowSizePolicy.ClampToScreen(
+            double.NaN, double.NaN, 440, 320,
+            0, 0, 1920, 1080);
+
+        Assert.Equal(0, left);
+        Assert.Equal(0, top);
+    }
 }

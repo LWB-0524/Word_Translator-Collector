@@ -10,9 +10,10 @@ public class TrayService : IDisposable
     private Action? _showReviewAction;
     private Action? _showSettingsAction;
     private Action? _exitAction;
-    private readonly TextToSpeechService _ttsService;
+    private readonly SettingsService _settingsService;
     private HwndSource? _hwndSource;
     private bool _iconAdded;
+    private System.Drawing.Icon? _trayIcon;
 
     // Win32 Shell_NotifyIcon
     [DllImport("shell32.dll", CharSet = CharSet.Auto)]
@@ -57,6 +58,8 @@ public class TrayService : IDisposable
     private const uint MF_SEPARATOR = 0x00000800;
     private const uint TPM_RIGHTBUTTON = 0x0002;
     private const uint TPM_BOTTOMALIGN = 0x0020;
+    // 必须带 TPM_RETURNCMD，TrackPopupMenu 才会返回菜单项 ID 而不是 BOOL。
+    private const uint TPM_RETURNCMD = 0x0100;
 
     // Menu item IDs
     private const uint IDM_SHOW = 1001;
@@ -85,9 +88,9 @@ public class TrayService : IDisposable
         public uint dwInfoFlags;
     }
 
-    public TrayService(TextToSpeechService ttsService, SettingsService settingsService)
+    public TrayService(SettingsService settingsService)
     {
-        _ttsService = ttsService;
+        _settingsService = settingsService;
     }
 
     public void Initialize(Window mainWindow, Action showReview, Action showSettings, Action exitApp)
@@ -111,13 +114,13 @@ public class TrayService : IDisposable
     {
         if (_iconAdded) return;
 
-        // Get icon from application resources or use default
         IntPtr iconHandle = IntPtr.Zero;
         try
         {
-            // Create a simple icon from the application's default
-            var icon = System.Drawing.SystemIcons.Application;
-            iconHandle = icon.Handle;
+            var exePath = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exePath))
+                _trayIcon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
+            iconHandle = (_trayIcon ?? System.Drawing.SystemIcons.Application).Handle;
         }
         catch
         {
@@ -171,22 +174,18 @@ public class TrayService : IDisposable
         GetCursorPos(out var pt);
         SetForegroundWindow(_hwndSource?.Handle ?? IntPtr.Zero);
 
-        uint selected = TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
+        uint selected = TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_BOTTOMALIGN | TPM_RETURNCMD,
             pt.X, pt.Y, 0, _hwndSource?.Handle ?? IntPtr.Zero, IntPtr.Zero);
 
         DestroyMenu(menu);
 
-        // Handle selection on UI thread
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        switch (selected)
         {
-            switch (selected)
-            {
-                case IDM_SHOW: ShowMainWindow(); break;
-                case IDM_REVIEW: _showReviewAction?.Invoke(); break;
-                case IDM_SETTINGS: _showSettingsAction?.Invoke(); break;
-                case IDM_EXIT: _exitAction?.Invoke(); break;
-            }
-        });
+            case IDM_SHOW: ShowMainWindow(); break;
+            case IDM_REVIEW: _showReviewAction?.Invoke(); break;
+            case IDM_SETTINGS: _showSettingsAction?.Invoke(); break;
+            case IDM_EXIT: _exitAction?.Invoke(); break;
+        }
     }
 
     public void ShowMainWindow()
@@ -196,8 +195,7 @@ public class TrayService : IDisposable
             _mainWindow.Show();
             _mainWindow.WindowState = WindowState.Normal;
             _mainWindow.Activate();
-            _mainWindow.Topmost = true;
-            // Re-apply settings-based topmost
+            _mainWindow.Topmost = _settingsService.Load().AlwaysOnTop;
         });
     }
 
@@ -252,6 +250,8 @@ public class TrayService : IDisposable
             _iconAdded = false;
         }
 
+        _trayIcon?.Dispose();
+        _trayIcon = null;
         _hwndSource?.RemoveHook(WndProc);
         _hwndSource = null;
     }

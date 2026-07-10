@@ -60,6 +60,11 @@ public class MainViewModel : BaseViewModel
 
     public void SetOwnerWindow(Window window) => _ownerWindow = window;
 
+    /// <summary>全局快捷键设置发生变化时触发，由宿主（App）负责重新注册。</summary>
+    public event Action? HotkeysChanged;
+
+    public void NotifyHotkeysChanged() => HotkeysChanged?.Invoke();
+
     private string _inputText = string.Empty;
     public string InputText
     {
@@ -217,8 +222,11 @@ public class MainViewModel : BaseViewModel
                 StatusMessage = $"{GetSourceLabel(response.Source)} · {stopwatch.ElapsedMilliseconds} ms · {StatusMessage}";
 
                 var settings = SettingsService.Load();
-                if (settings.AutoSpeakAfterQuery)
+                if (settings.AutoSpeakAfterQuery && settings.TtsEnabled)
+                {
                     _ttsService.SpeakAsync(text);
+                    UpdateSpokenCount();
+                }
 
                 switch (BehaviorOptions.ResolvePostQueryAction(
                             isCtrlEnter, settings.AutoHideAfterQuery, settings.CtrlEnterBehavior))
@@ -254,23 +262,26 @@ public class MainViewModel : BaseViewModel
         _ => "AI"
     };
 
-    private Task SaveToDatabase(string text, AiExplanationResult result, string? rawResponse)
+    private async Task SaveToDatabase(string text, AiExplanationResult result, string? rawResponse)
     {
         try
         {
             var normalized = TextNormalizer.Normalize(text);
             var today = DateTime.Now.ToString("yyyy-MM-dd");
             var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var existing = _databaseService.FindByNormalizedTextAndDate(normalized, today);
+            var existing = await Task.Run(
+                () => _databaseService.FindByNormalizedTextAndDate(normalized, today));
 
             if (existing != null)
             {
-                _databaseService.UpdateLookupCount(existing.Id, existing.LookupCount + 1);
+                await Task.Run(
+                    () => _databaseService.UpdateLookupCount(existing.Id, existing.LookupCount + 1));
                 StatusMessage = "今日已记录，已更新查询次数";
             }
             else
             {
-                var historical = _databaseService.FindByNormalizedText(normalized);
+                var historical = await Task.Run(
+                    () => _databaseService.FindByNormalizedText(normalized));
                 var item = new VocabularyItem
                 {
                     Text = text,
@@ -294,7 +305,7 @@ public class MainViewModel : BaseViewModel
                     SpokenCount = 0
                 };
 
-                _databaseService.Insert(item);
+                await Task.Run(() => _databaseService.Insert(item));
                 StatusMessage = historical != null
                     ? "之前记录过，已加入今日沉淀"
                     : "已自动保存到今日沉淀";
@@ -304,8 +315,6 @@ public class MainViewModel : BaseViewModel
         {
             StatusMessage = $"保存失败：{ex.Message}";
         }
-
-        return Task.CompletedTask;
     }
 
     private void Clear()
@@ -349,25 +358,29 @@ public class MainViewModel : BaseViewModel
         }
 
         _ttsService.SpeakAsync(InputText);
+        UpdateSpokenCount();
     }
 
     public void UpdateSpokenCount()
     {
-        try
-        {
-            var text = InputText?.Trim();
-            if (string.IsNullOrWhiteSpace(text)) return;
+        var text = InputText?.Trim();
+        if (string.IsNullOrWhiteSpace(text)) return;
 
-            var normalized = TextNormalizer.Normalize(text);
-            var today = DateTime.Now.ToString("yyyy-MM-dd");
-            var existing = _databaseService.FindByNormalizedTextAndDate(normalized, today);
-            if (existing != null)
-                _databaseService.UpdateSpokenCount(existing.Id, existing.SpokenCount + 1);
-        }
-        catch
+        var normalized = TextNormalizer.Normalize(text);
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        _ = Task.Run(() =>
         {
-            // 朗读计数不影响主要流程。
-        }
+            try
+            {
+                var existing = _databaseService.FindByNormalizedTextAndDate(normalized, today);
+                if (existing != null)
+                    _databaseService.UpdateSpokenCount(existing.Id, existing.SpokenCount + 1);
+            }
+            catch
+            {
+                // 朗读计数不影响主要流程。
+            }
+        });
     }
 
     private void ToggleTopmost() => IsAlwaysOnTop = !IsAlwaysOnTop;

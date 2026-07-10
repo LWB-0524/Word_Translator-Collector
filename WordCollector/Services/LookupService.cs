@@ -25,7 +25,8 @@ public sealed class LookupService
         CancellationToken cancellationToken = default)
     {
         var normalized = TextNormalizer.Normalize(text);
-        var localItem = _databaseService.FindByNormalizedText(normalized);
+        var localItem = await Task.Run(
+            () => _databaseService.FindByNormalizedText(normalized), cancellationToken);
         if (localItem != null)
             return FromLocal(localItem);
 

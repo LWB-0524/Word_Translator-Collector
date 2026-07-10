@@ -295,9 +295,10 @@ public class DatabaseService
 
             if (!string.IsNullOrWhiteSpace(searchText))
             {
-                conditions.Add("(text LIKE @search OR meaning_zh LIKE @search2)");
-                parameters.Add(new SqliteParameter("@search", $"%{searchText}%"));
-                parameters.Add(new SqliteParameter("@search2", $"%{searchText}%"));
+                var pattern = $"%{EscapeLikePattern(searchText)}%";
+                conditions.Add(@"(text LIKE @search ESCAPE '\' OR meaning_zh LIKE @search2 ESCAPE '\')");
+                parameters.Add(new SqliteParameter("@search", pattern));
+                parameters.Add(new SqliteParameter("@search2", pattern));
             }
 
             if (!string.IsNullOrWhiteSpace(dateFrom))
@@ -435,6 +436,9 @@ public class DatabaseService
             LastSpokenAt = reader.IsDBNull(reader.GetOrdinal("last_spoken_at")) ? null : reader.GetString(reader.GetOrdinal("last_spoken_at"))
         };
     }
+
+    private static string EscapeLikePattern(string text) =>
+        text.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
 
     private static string? TryGetString(SqliteDataReader reader, string column)
     {

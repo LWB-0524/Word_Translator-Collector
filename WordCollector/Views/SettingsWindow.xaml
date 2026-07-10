@@ -153,26 +153,50 @@
 
                 <Border Style="{StaticResource SectionPanel}">
                     <StackPanel>
-                        <TextBlock Text="快捷键" Style="{StaticResource SettingsHeading}" Margin="0,0,0,16"/>
+                        <TextBlock Text="快捷键" Style="{StaticResource SettingsHeading}" Margin="0,0,0,6"/>
+                        <TextBlock Text="点击下方方框再按下想要的组合键即可修改全局快捷键（需包含 Ctrl / Alt / Shift / Win）。保存后立即生效。"
+                                   FontSize="13" Foreground="{DynamicResource TextTertiaryBrush}"
+                                   TextWrapping="Wrap" Margin="0,0,0,16"/>
+
                         <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="164"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Left"><TextBlock Text="Ctrl + Shift + Space" FontFamily="Consolas" FontSize="12"/></Border>
-                            <TextBlock Grid.Column="1" Text="显示快速捕获窗口" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBox Tag="ShowWindow" HorizontalAlignment="Left" Width="196" Height="38"
+                                     Text="{Binding ShowWindowHotkeyDisplay, Mode=OneWay}"
+                                     IsReadOnly="True" IsReadOnlyCaretVisible="False" Cursor="Hand"
+                                     Style="{StaticResource ModernTextBox}" FontFamily="Consolas" FontSize="12"
+                                     TextAlignment="Center" VerticalContentAlignment="Center"
+                                     ToolTip="点击后按下新的快捷键组合；按 Esc 取消，按 Backspace 恢复默认"
+                                     PreviewKeyDown="HotkeyBox_PreviewKeyDown"/>
+                            <TextBlock Grid.Column="1" Text="显示快速捕获窗口" VerticalAlignment="Center" Margin="14,0,0,0"
+                                       FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
                         <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="164"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Left"><TextBlock Text="Ctrl + Shift + Q" FontFamily="Consolas" FontSize="12"/></Border>
-                            <TextBlock Grid.Column="1" Text="读取剪贴板并直接查询" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBox Tag="QuickQuery" HorizontalAlignment="Left" Width="196" Height="38"
+                                     Text="{Binding QuickQueryHotkeyDisplay, Mode=OneWay}"
+                                     IsReadOnly="True" IsReadOnlyCaretVisible="False" Cursor="Hand"
+                                     Style="{StaticResource ModernTextBox}" FontFamily="Consolas" FontSize="12"
+                                     TextAlignment="Center" VerticalContentAlignment="Center"
+                                     ToolTip="点击后按下新的快捷键组合；按 Esc 取消，按 Backspace 恢复默认"
+                                     PreviewKeyDown="HotkeyBox_PreviewKeyDown"/>
+                            <TextBlock Grid.Column="1" Text="读取剪贴板并直接查询" VerticalAlignment="Center" Margin="14,0,0,0"
+                                       FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
+
+                        <TextBlock x:Name="HotkeyHint" Text="" FontSize="12" Visibility="Collapsed"
+                                   Foreground="{DynamicResource DangerBrush}" Margin="2,2,0,14"
+                                   TextWrapping="Wrap"/>
+
+                        <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,0,0,14"/>
                         <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="164"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Left"><TextBlock Text="Enter" FontFamily="Consolas" FontSize="12"/></Border>
-                            <TextBlock Grid.Column="1" Text="查询释义并自动保存" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Column="1" Text="查询释义并自动保存" VerticalAlignment="Center" Margin="14,0,0,0" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
                         <Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="164"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Left"><TextBlock Text="Ctrl + L / Esc" FontFamily="Consolas" FontSize="12"/></Border>
-                            <TextBlock Grid.Column="1" Text="清空当前内容 / 隐藏到托盘" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Column="1" Text="清空当前内容 / 隐藏到托盘" VerticalAlignment="Center" Margin="14,0,0,0" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
                     </StackPanel>
                 </Border>
