@@ -7,6 +7,8 @@ x64/
 x86/
 artifacts/
 TestResults/
+publish/
+publish_test/
 
 # Visual Studio and Rider
 .vs/
