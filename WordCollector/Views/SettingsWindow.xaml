@@ -151,6 +151,21 @@
                     </StackPanel>
                 </Border>
 
+                <Border Style="{StaticResource SectionPanel}" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="词库" Style="{StaticResource SettingsHeading}"/>
+                        <TextBlock Text="一键导入内置的专业词表，已存在的词条会自动跳过。"
+                                   FontSize="13" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,5,0,16"/>
+                        <WrapPanel>
+                            <Button Content="导入土木工程基础词库" Click="ImportCivilEngineering_Click"
+                                    Style="{StaticResource OutlineButton}" Padding="15,9" Margin="0,0,12,0"/>
+                            <TextBlock Text="约 140 个核心词，含音标、释义与例句，导入后可在每日复盘中复习。"
+                                       VerticalAlignment="Center" FontSize="12"
+                                       Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
                 <Border Style="{StaticResource SectionPanel}">
                     <StackPanel>
                         <TextBlock Text="快捷键" Style="{StaticResource SettingsHeading}" Margin="0,0,0,6"/>

@@ -22,6 +22,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Assets\civil-engineering-vocabulary.json" />
+    <EmbeddedResource Include="Assets\civil-engineering-vocabulary.json" />
     <Resource Include="Assets\wordcollector-icon.png" />
     <Resource Include="Assets\wordcollector.ico" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.28" />
