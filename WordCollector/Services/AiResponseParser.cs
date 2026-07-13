@@ -12,9 +12,11 @@ public static class AiResponseParser
     public static bool TryExtractAssistantContent(
         string responseBody,
         out string content,
+        out bool truncated,
         out string error)
     {
         content = string.Empty;
+        truncated = false;
         error = string.Empty;
 
         try
@@ -30,6 +32,11 @@ public static class AiResponseParser
                 error = "AI 返回格式无效";
                 return false;
             }
+
+            // finish_reason == "length" 表示回复因 max_tokens 上限被截断。
+            truncated = choices[0].TryGetProperty("finish_reason", out var finishReason) &&
+                        finishReason.ValueKind == JsonValueKind.String &&
+                        string.Equals(finishReason.GetString(), "length", StringComparison.OrdinalIgnoreCase);
 
             content = contentElement.GetString()?.Trim() ?? string.Empty;
             if (content.Length == 0)
