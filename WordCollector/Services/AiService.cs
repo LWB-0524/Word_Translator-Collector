@@ -49,12 +49,12 @@ public class AiService : IAiLookupProvider, IDisposable
 - phonetic: IPA pronunciation (for words, use standard IPA; for phrases/sentences leave empty string)
 - meaning_zh: short Chinese translation
 - brief_explanation: one-sentence usage tip in Chinese
-- detailed_explanation: longer explanation in Chinese (1-2 sentences)
-- example_en: one natural English example sentence
+- detailed_explanation: ONE concise Chinese sentence
+- example_en: one short natural English example sentence
 - example_zh: Chinese translation of the example
 - key_expressions: array of {expression, meaning_zh} for sentences (empty array for words/phrases)
 
-Keep responses concise. Example:
+Keep every field short so the whole JSON stays complete and valid. Do not add trailing commentary. Example:
 {""item_type"":""word"",""phonetic"":""/ɪɡˈzæmpl̩/"",""meaning_zh"":""例子"",""brief_explanation"":""常用 for example 引出具体事例"",""detailed_explanation"":""example 是可数名词，指能代表同类事物的具体事例。"",""example_en"":""Can you give me an example?"",""example_zh"":""你能给我举个例子吗？"",""key_expressions"":[]}";
 
             var requestBody = new
@@ -66,7 +66,7 @@ Keep responses concise. Example:
                     new { role = "user", content = text }
                 },
                 temperature = 0.2,
-                max_tokens = 600
+                max_tokens = 1200
             };
 
             var json = JsonSerializer.Serialize(requestBody);
@@ -94,7 +94,7 @@ Keep responses concise. Example:
 
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!AiResponseParser.TryExtractAssistantContent(
-                    responseBody, out var assistantContent, out var parseError))
+                    responseBody, out var assistantContent, out var wasTruncated, out var parseError))
             {
                 return (null, null, parseError);
             }
@@ -102,6 +102,9 @@ Keep responses concise. Example:
             if (!AiResponseParser.TryParseExplanation(
                     assistantContent, out var result, out var rawContent))
             {
+                // 回复被 max_tokens 截断时 JSON 必然残缺，给出明确提示而非笼统的“解析失败”。
+                if (wasTruncated)
+                    return (null, rawContent, "AI 回复过长被截断，请重试或缩短查询内容");
                 return (null, rawContent, null);
             }
 

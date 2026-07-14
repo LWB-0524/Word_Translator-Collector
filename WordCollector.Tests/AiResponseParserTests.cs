@@ -8,13 +8,28 @@ public class AiResponseParserTests
     public void TryExtractAssistantContent_ReadsOpenAiCompatibleResponse()
     {
         const string response = """
-            {"choices":[{"message":{"content":"{\"item_type\":\"word\",\"meaning_zh\":\"测试\"}"}}]}
+            {"choices":[{"finish_reason":"stop","message":{"content":"{\"item_type\":\"word\",\"meaning_zh\":\"测试\"}"}}]}
             """;
 
-        var ok = AiResponseParser.TryExtractAssistantContent(response, out var content, out var error);
+        var ok = AiResponseParser.TryExtractAssistantContent(response, out var content, out var truncated, out var error);
 
         Assert.True(ok, error);
+        Assert.False(truncated);
         Assert.Contains("meaning_zh", content);
+    }
+
+    [Fact]
+    public void TryExtractAssistantContent_FlagsTruncatedResponse()
+    {
+        // finish_reason == "length" 表示回复被 max_tokens 截断。
+        const string response = """
+            {"choices":[{"finish_reason":"length","message":{"content":"{\"item_type\":\"phrase\",\"meaning_zh\":\"钢筋混凝土上翼缘\",\"key_expressions"}}]}
+            """;
+
+        var ok = AiResponseParser.TryExtractAssistantContent(response, out _, out var truncated, out _);
+
+        Assert.True(ok);
+        Assert.True(truncated);
     }
 
     [Fact]
