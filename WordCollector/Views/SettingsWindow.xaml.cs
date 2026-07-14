@@ -54,6 +54,11 @@ public partial class SettingsWindow : Window
         ApiKeyBox.Password = string.Empty;
     }
 
+    private void ImportCivilEngineering_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.ImportCivilEngineeringCommand.Execute(null);
+    }
+
     /// <summary>
     /// 快捷键录制：吞掉键盘输入，把“修饰键 + 主键”翻译成组合并写回 ViewModel。
     /// Esc 取消本次录制；Backspace/Delete 恢复该快捷键的默认值。

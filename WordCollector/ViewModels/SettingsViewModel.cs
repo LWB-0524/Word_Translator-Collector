@@ -63,6 +63,7 @@ public class SettingsViewModel : BaseViewModel
         SaveCommand = new RelayCommand(async () => await SaveAsync());
         TestConnectionCommand = new RelayCommand(async () => await TestConnectionAsync());
         ResetDefaultsCommand = new RelayCommand(ResetDefaults);
+        ImportCivilEngineeringCommand = new RelayCommand(ImportCivilEngineering);
     }
 
     private string _aiProvider = "openai";
@@ -167,6 +168,7 @@ public class SettingsViewModel : BaseViewModel
     public ICommand SaveCommand { get; }
     public ICommand TestConnectionCommand { get; }
     public ICommand ResetDefaultsCommand { get; }
+    public ICommand ImportCivilEngineeringCommand { get; }
 
     public async Task SaveAsync()
     {
@@ -260,6 +262,31 @@ public class SettingsViewModel : BaseViewModel
         finally
         {
             IsTesting = false;
+        }
+    }
+
+    private void ImportCivilEngineering()
+    {
+        var confirm = MessageBox.Show(
+            "将把内置的土木工程基础学术词汇导入词库（已存在的词条会自动跳过）。是否继续？",
+            "导入土木工程词库", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            var result = VocabularyImportService.ImportBuiltIn(_mainViewModel.DbService);
+            var message = result.Added > 0
+                ? $"已导入 {result.Added} 个新词条"
+                : "没有新增词条";
+            if (result.Skipped > 0)
+                message += $"，跳过 {result.Skipped} 个已存在的";
+            MessageBox.Show(message + "。", "导入完成", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"导入失败：{ex.Message}", "导入土木工程词库",
+                MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
